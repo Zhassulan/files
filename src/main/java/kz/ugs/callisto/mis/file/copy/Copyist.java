@@ -35,11 +35,13 @@ import kz.ugs.callisto.system.propertyfilemanager.*;
  */
 public class Copyist {
 	
-	private static Logger logger = LogManager.getLogger(Copyist.class); 
+	private static Logger logger = LogManager.getLogger(Copyist.class);
+	
 	private static final String pathListFile = PropsManager.getInstance().getProperty("pathListFile");
 	private static final String serverFolder = PropsManager.getInstance().getProperty("serverFolder");
-	
+	private String curDevice;
 	private Date serverLastDate = StringToDate(PropsManager.getInstance().getProperty("serverLastDate"));
+	private Date lastFileDate; 
 	
 	/**
 	 * получить список путей к сетевым папкам
@@ -66,18 +68,22 @@ public class Copyist {
 		return null;
 	}
 	
-	private void listDirFiles(String path) {
+	private void copyFiles(String path) {
 		Date fileDate;
 		File curDir = new File(path);
 		File[] filesList = curDir.listFiles();
 		for(File f : filesList)	{
 			if(f.isDirectory())
-				listDirFiles(f.getPath());
+				copyFiles(f.getPath());
 			if(f.isFile()){
 				fileDate = getFileCreatedDate(f.getAbsolutePath());
-				logger.info(f.getAbsolutePath() + " " + getFormattedDate(fileDate));
+				logger.info(fileDate);
+				//logger.info(f.getAbsolutePath() + " " + getFormattedDate(fileDate));
+				logger.info("Comparing " + fileDate + " ? " + serverLastDate);
 				if (fileDate.compareTo(serverLastDate) > 0) {
-					serverLastDate = fileDate; 
+					createDir(serverFolder + curDevice);
+					copyFile(f.getAbsolutePath(), serverFolder + curDevice + f.getName());
+					lastFileDate = fileDate;
 				}
 			}
 		}
@@ -95,13 +101,13 @@ public class Copyist {
 		return null;
 	}
 	
-	private Date getLastDate(String dirPath)	{
+	private Date processRemotePath(String dirPath)	{
 		Date fileDate;
 		File curDir = new File(dirPath);
 		File[] filesList = curDir.listFiles();
 		for	(File f : filesList)	{
 			if	(f.isDirectory())
-				listDirFiles(f.getPath());
+				copyFiles(f.getPath());
 			if	(f.isFile())	{
 				fileDate = getFileCreatedDate(f.getAbsolutePath());
 				if (fileDate != null)
@@ -113,24 +119,24 @@ public class Copyist {
 		return null;
 	}
 	
-	private void readAllPathList()	{
+	private void processAllPathList()	{
 		List <String> pathList = readFilePathList();
 		for (String pathItem : pathList) {
-			//listFiles(pathItem);
-			getLastDate(pathItem);
-			logger.info(getFormattedDate(serverLastDate));
+			curDevice = getDeviceCode(pathItem);
+			processRemotePath(pathItem);
+			//logger.info(getFormattedDate(serverLastDate));
 		}
 	}
 	
 	private String getFormattedDate(Date pDate)	{
-		return new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(pDate.getTime());
+		return new SimpleDateFormat("dd.MM.yyyy HH:mm:ss").format(pDate.getTime());
 	}
 	
 	private String getDeviceCode(String path)	{
 		if (path.equals("//192.168.1.242/Temp/"))
-			return "Device 1";
+			return "Device1/";
 		if (path.equals("//192.168.1.180/Data/"))
-			return "Device 2";
+			return "Device2/";
 		return null;
 	}
 	
@@ -143,17 +149,29 @@ public class Copyist {
 			inputChannel = new FileInputStream(source).getChannel();
 			outputChannel = new FileOutputStream(dest).getChannel();
 			outputChannel.transferFrom(inputChannel, 0, inputChannel.size());
+			logger.info("Copied file " + sourceFilePath + " to " + destFilePath);
 		} catch (IOException e) {
-			logger.error(e.getMessage() + e.getStackTrace());
+			logger.error(e.getMessage(), e);
 			}
 		finally {
 			try {
 				inputChannel.close();
 				outputChannel.close();
 			} catch (IOException e) {
-				logger.error(e.getMessage() + e.getStackTrace());
+				logger.error(e.getMessage(), e);
 			}
 		}
+	}
+	
+	private void createDir(String dirPath)	{
+		Path path = Paths.get(dirPath);
+	    if (!Files.exists(path)) {
+	        try {
+	            Files.createDirectories(path);
+	        } catch (IOException e) {
+	            logger.error(e.getMessage(), e);
+	    }
+	    }
 	}
 	
 	private void copyToServer()	{
@@ -162,7 +180,7 @@ public class Copyist {
 	
 	public static void main(String args[])	{
 		Copyist c = new Copyist();
-		logger.info("Server last date is " + c.serverLastDate);
-		c.readAllPathList();
+		c.processAllPathList();
+		PropsManager.getInstance().setProperty("serverLastDate", c.getFormattedDate(c.lastFileDate));
 	}
 }
