@@ -43,6 +43,10 @@ public class Copyist {
 	private Date serverLastDate = StringToDate(PropsManager.getInstance().getProperty("serverLastDate"));
 	private Date lastFileDate; 
 	
+	public Copyist() {
+		copyToServer();
+	}
+	
 	/**
 	 * получить список путей к сетевым папкам
 	 * @return
@@ -175,12 +179,12 @@ public class Copyist {
 	}
 	
 	private void copyToServer()	{
-		
+		logger.info("Server last date " + serverLastDate);
+		processAllPathList();
+		PropsManager.getInstance().setValueProperty("serverLastDate", getFormattedDate(lastFileDate));
 	}
 	
 	public static void main(String args[])	{
 		Copyist c = new Copyist();
-		c.processAllPathList();
-		PropsManager.getInstance().setProperty("serverLastDate", c.getFormattedDate(c.lastFileDate));
 	}
 }
